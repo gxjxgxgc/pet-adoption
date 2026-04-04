@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.petadoption.petadoption.mapper.PetMapper">
+    
+
+    <resultMap id="BaseResultMap" type="Pet">
+        <id column="id" property="id"/>
+        <result column="name" property="name"/>
+        <result column="type" property="type"/>
+        <result column="breed" property="breed"/>
+        <result column="age" property="age"/>
+        <result column="gender" property="gender"/>
+        <result column="color" property="color"/>
+        <result column="weight" property="weight"/>
+        <result column="description" property="description"/>
+        <result column="images" property="images"/>
+        <result column="status" property="status"/>
+        <result column="sterilized" property="sterilized"/>
+        <result column="owner_id" property="ownerId"/>
+        <result column="shelter_id" property="shelterId"/>
+        <result column="publish_time" property="publishTime"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="deleted" property="deleted"/>
+        <result column="view_count" property="viewCount"/>
+        <result column="favorite_count" property="favoriteCount"/>
+    </resultMap>
+    
+    <resultMap id="PetWithHealthStatusResultMap" type="Pet" extends="BaseResultMap">
+        <collection property="healthStatuses" ofType="HealthStatus">
+            <id column="hs_id" property="id"/>
+            <result column="hs_code" property="code"/>
+            <result column="hs_name" property="name"/>
+            <result column="hs_description" property="description"/>
+        </collection>
+    </resultMap>
+    
+    <select id="selectPetWithHealthStatuses" resultMap="PetWithHealthStatusResultMap">
+        SELECT p.*, 
+               hs.id as hs_id, 
+               hs.code as hs_code, 
+               hs.name as hs_name, 
+               hs.description as hs_description
+        FROM pet_pet p
+        LEFT JOIN pet_health_status phs ON p.id = phs.pet_id
+        LEFT JOIN health_status hs ON phs.health_status_id = hs.id
+        WHERE p.id = #{id} AND p.deleted = 0
+    </select>
+    <select id="selectPetsByStatus" resultMap="BaseResultMap">
+        SELECT * FROM pet_pet WHERE status = #{status} AND deleted = 0 ORDER BY publish_time DESC
+    </select>
+    <select id="selectPetsByTypeAndStatus" resultMap="BaseResultMap">
+        SELECT * FROM pet_pet WHERE type = #{type} AND status = #{status} AND deleted = 0 ORDER BY publish_time DESC
+    </select>
+    <select id="searchPets" resultMap="BaseResultMap">
+        SELECT * FROM pet_pet WHERE (name LIKE CONCAT('%', #{keyword}, '%') OR breed LIKE CONCAT('%', #{keyword}, '%')) AND deleted = 0 ORDER BY publish_time DESC
+    </select>
+    <select id="selectHotPets" resultMap="BaseResultMap">
+        SELECT * FROM pet_pet WHERE status = 1 AND deleted = 0 ORDER BY (view_count * 0.3 + favorite_count * 0.7) DESC, publish_time DESC
+    </select>
+    <select id="selectPetsByFilter" resultMap="BaseResultMap">
+        SELECT p.*
+        FROM pet_pet p
+        WHERE p.deleted = 0
+        <if test="keyword != null and keyword != ''">
+            AND (p.name LIKE CONCAT('%', #{keyword}, '%') OR p.breed LIKE CONCAT('%', #{keyword}, '%') OR p.description LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="type != null and type != ''">
+            AND p.type = #{type}
+        </if>
+        <if test="breed != null and breed != ''">
+            AND p.breed LIKE CONCAT('%', #{breed}, '%')
+        </if>
+        <if test="gender != null">
+            AND p.gender = #{gender}
+        </if>
+        <if test="minAge != null">
+            AND p.age <![CDATA[ >= ]]> #{minAge}
+        </if>
+        <if test="maxAge != null">
+            AND p.age <![CDATA[ <= ]]> #{maxAge}
+        </if>
+        <if test="minWeight != null">
+            AND p.weight <![CDATA[ >= ]]> #{minWeight}
+        </if>
+        <if test="maxWeight != null">
+            AND p.weight <![CDATA[ <= ]]> #{maxWeight}
+        </if>
+        <if test="healthStatusList != null and healthStatusList.size() > 0">
+            AND p.id IN (
+                SELECT phs2.pet_id 
+                FROM pet_health_status phs2
+                INNER JOIN health_status hs2 ON phs2.health_status_id = hs2.id
+                WHERE hs2.code IN 
+                <foreach collection="healthStatusList" item="status" open="(" separator="," close=")">
+                    #{status}
+                </foreach>
+                GROUP BY phs2.pet_id
+                HAVING COUNT(DISTINCT hs2.code) = ${healthStatusList.size}
+            )
+        </if>
+        <if test="status != null">
+            AND p.status = #{status}
+        </if>
+        <if test="statusList != null and statusList.size() > 0">
+            AND p.status IN
+            <foreach collection="statusList" item="s" open="(" separator="," close=")">
+                #{s}
+            </foreach>
+        </if>
+        <if test="sortBy != null and sortBy != ''">
+            ORDER BY 
+            <choose>
+                <when test="sortBy == 'publishTime'">p.publish_time</when>
+                <when test="sortBy == 'age'">p.age</when>
+                <when test="sortBy == 'weight'">p.weight</when>
+                <when test="sortBy == 'viewCount'">p.view_count</when>
+                <when test="sortBy == 'favoriteCount'">p.favorite_count</when>
+                <otherwise>p.publish_time</otherwise>
+            </choose>
+            <if test="sortOrder != null and sortOrder == 'asc'">ASC</if>
+            <if test="sortOrder == null or sortOrder != 'asc'">DESC</if>
+        </if>
+        <if test="sortBy == null or sortBy == ''">
+            ORDER BY p.publish_time DESC
+        </if>
+    </select>
+</mapper>
